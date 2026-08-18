@@ -392,6 +392,31 @@ input::placeholder { color: var(--muted); }
 
 .field-error { font-size: 13px; color: var(--error); min-height: 1em; display: block; }
 
+.consent-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 4px 0 4px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.consent-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--purple);
+  cursor: pointer;
+}
+
+.consent-row a { color: var(--muted); text-decoration: underline; }
+.consent-row a:hover { color: var(--purple); }
+.consent-row input[aria-invalid="true"] { outline: 2px solid var(--error); outline-offset: 2px; }
+
 .form-footer {
   display: flex;
   flex-direction: column;
@@ -434,7 +459,29 @@ input::placeholder { color: var(--muted); }
   color: var(--muted);
 }
 
-.footer-meta { display: flex; gap: 24px; }
+.footer-meta { display: flex; gap: 20px; align-items: center; }
+
+.footer-meta a, .footer-meta button {
+  color: var(--muted);
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.footer-meta a:hover, .footer-meta button:hover { color: var(--purple); }
+
+.footer-disclaimer {
+  max-width: 62ch;
+  margin: 0 auto;
+  padding: 0 32px 40px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  text-align: center;
+}
 
 @keyframes hy-bounce {
   0%, 100% { transform: translateY(0); }
@@ -456,7 +503,8 @@ input::placeholder { color: var(--muted); }
   .waitlist { padding: 80px 20px; }
   .waitlist-card { padding: 40px 24px; }
   .footer { flex-direction: column; gap: 20px; text-align: center; }
-  .footer-meta { flex-direction: column; gap: 12px; }
+  .footer-meta { flex-wrap: wrap; justify-content: center; gap: 16px; }
+  .footer-disclaimer { padding: 0 20px 32px; }
 }
 </style>
 </head>
@@ -611,6 +659,11 @@ input::placeholder { color: var(--muted); }
           <input name="patients" required placeholder="Approx. 150" data-error="Enter an approximate number of patients" aria-describedby="error-patients">
           <span class="field-error" id="error-patients"></span>
         </label>
+        <label class="consent-row">
+          <input type="checkbox" id="marketing-consent" name="marketing_consent" aria-describedby="error-consent">
+          <span>I agree to hayso contacting me about the clinic waiting list, and I've read the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+        </label>
+        <span class="field-error" id="error-consent"></span>
         <div class="form-footer">
           <button class="btn btn-primary" type="submit">Join the waiting list</button>
           <span class="form-hint">No spam. One email when we open.</span>
@@ -633,10 +686,13 @@ input::placeholder { color: var(--muted); }
       <span class="brand-name brand-name-sm">hayso</span>
     </div>
     <div class="footer-meta">
-      <span>© 2026 hayso</span>
-      <span>hayso supports care delivered by a registered clinician. It does not replace medical advice.</span>
+      <a href="/privacy">Privacy</a>
+      <a href="/cookies">Cookies</a>
+      <a href="/terms">Terms</a>
+      <button type="button" id="cookie-settings-link">Cookie settings</button>
     </div>
   </footer>
+  <p class="footer-disclaimer">hayso supports care delivered by a registered clinician. It does not replace medical advice. &copy; <span id="year">2026</span> hayso</p>
 </div>
 
 <script>
@@ -648,6 +704,8 @@ const form = document.getElementById('waitlist-form');
 const success = document.getElementById('waitlist-success');
 const successName = document.getElementById('success-name');
 const successEmail = document.getElementById('success-email');
+const consentBox = document.getElementById('marketing-consent');
+const consentError = document.getElementById('error-consent');
 
 const fields = [...form.querySelectorAll('input[required]')];
 let submitAttempted = false;
@@ -674,6 +732,16 @@ function validate() {
     }
   }
 
+  const consentMessage = consentBox.checked ? '' : 'Please agree before joining the waiting list';
+  consentError.textContent = consentMessage;
+
+  if (consentMessage) {
+    consentBox.setAttribute('aria-invalid', 'true');
+    if (!firstInvalid) firstInvalid = consentBox;
+  } else {
+    consentBox.removeAttribute('aria-invalid');
+  }
+
   return firstInvalid;
 }
 
@@ -682,6 +750,10 @@ for (const input of fields) {
     if (submitAttempted) validate();
   });
 }
+
+consentBox.addEventListener('change', () => {
+  if (submitAttempted) validate();
+});
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -695,6 +767,7 @@ form.addEventListener('submit', async (event) => {
 
   // Get form data
   const formData = new FormData(form);
+  const params = new URLSearchParams(window.location.search);
   const data = {
     name: formData.get('name'),
     email: formData.get('email'),
@@ -703,8 +776,14 @@ form.addEventListener('submit', async (event) => {
     role: formData.get('role') || null,
     location: null,
     patients: formData.get('patients'),
-    utm_source: new URLSearchParams(window.location.search).get('utm_source') || 'direct',
-    utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || 'organic'
+    utm_source: params.get('utm_source') || 'direct',
+    utm_medium: params.get('utm_medium') || 'organic',
+    utm_campaign: params.get('utm_campaign'),
+    marketing_consent: true,
+    consent_at: new Date().toISOString(),
+    consent_text: document.querySelector('.consent-row span').innerText.trim(),
+    consent_source_url: window.location.href,
+    privacy_policy_version: '2026-08-19'
   };
 
   try {
@@ -736,6 +815,9 @@ form.addEventListener('submit', async (event) => {
     console.error('Error:', error);
   }
 });
+
+document.getElementById('year').textContent = new Date().getFullYear();
 </script>
+<script src="/cookie-consent.js" defer></script>
 </body>
 </html>
